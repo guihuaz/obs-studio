@@ -16,6 +16,7 @@ private:
 	QLabel *droppedFrames;
 	QLabel *streamTime;
 	QLabel *recordTime;
+	QLabel *recordScheduleTime;
 	QLabel *cpuUsage;
 	QLabel *kbps;
 	QLabel *statusSquare;
@@ -28,6 +29,10 @@ private:
 	int retries = 0;
 	int totalStreamSeconds = 0;
 	int totalRecordSeconds = 0;
+
+	bool recordScheduled = false;
+	int recordScheduleSecsToStart = 0;
+	int recordScheduleDuration = 0;
 
 	int reconnectTimeout = 0;
 
@@ -61,6 +66,7 @@ private:
 	void UpdateBandwidth();
 	void UpdateStreamTime();
 	void UpdateRecordTime();
+	void UpdateRecordScheduleTime();
 	void UpdateDroppedFrames();
 
 	static void OBSOutputReconnect(void *data, calldata_t *params);
@@ -81,6 +87,9 @@ public:
 	void StreamStopped();
 	void RecordingStarted(obs_output_t *output);
 	void RecordingStopped();
+
+	void RecordingScheduled(int secsToStart, int duration);
+	void RecordingScheduleCancelled();
 
 	void ReconnectClear();
 };

@@ -1686,6 +1686,9 @@ OBSBasic::~OBSBasic()
 	delete programOptions;
 	delete program;
 
+	delete recordingScheduleStartTimer;
+	delete recordingScheduleStopTimer;
+
 	/* XXX: any obs data must be released before calling obs_shutdown.
 	 * currently, we can't automate this with C++ RAII because of the
 	 * delicate nature of obs_shutdown needing to be freed before the UI
@@ -4268,6 +4271,11 @@ void OBSBasic::RecordingStart()
 	ui->statusbar->RecordingStarted(outputHandler->fileOutput);
 	ui->recordButton->setText(QTStr("Basic.Main.StopRecording"));
 
+	// BUG here: button state doesn't always refresh
+	ui->scheduleButton->setEnabled(false);
+	ui->scheduleStartTimeEdit->setEnabled(false);
+	ui->scheduleDuration->setEnabled(false);
+
 	if (sysTrayRecord)
 		sysTrayRecord->setText(ui->recordButton->text());
 
@@ -4284,6 +4292,8 @@ void OBSBasic::RecordingStop(int code)
 {
 	ui->statusbar->RecordingStopped();
 	ui->recordButton->setText(QTStr("Basic.Main.StartRecording"));
+
+	CancelScheduledRecording();
 
 	if (sysTrayRecord)
 		sysTrayRecord->setText(ui->recordButton->text());
@@ -4322,6 +4332,67 @@ void OBSBasic::RecordingStop(int code)
 		api->on_event(OBS_FRONTEND_EVENT_RECORDING_STOPPED);
 
 	OnDeactivate();
+}
+
+void OBSBasic::ScheduleRecording()
+{
+	ui->scheduleButton->setText(QTStr("Basic.Main.CancelScheduledRecording"));
+
+	auto startTime = ui->scheduleStartTimeEdit->dateTime();
+	auto current = QDateTime::currentDateTime();
+	auto secsToStart = current.secsTo(startTime);
+	if (secsToStart < 0)
+		secsToStart = 0;
+
+	auto durationInSecs = ui->scheduleDuration->value() * 60;
+
+	recordingScheduleStartTimer = new QTimer(this);
+	recordingScheduleStartTimer->setSingleShot(true);
+	recordingScheduleStartTimer->setInterval(secsToStart * 1000);
+	recordingScheduleStartTimer->start();
+	connect(
+		recordingScheduleStartTimer,
+		SIGNAL(timeout()),
+		SLOT(StartRecording()));
+
+	recordingScheduleStopTimer = new QTimer(this);
+	recordingScheduleStopTimer->setSingleShot(true);
+	recordingScheduleStopTimer->setInterval(
+		(secsToStart + durationInSecs) * 1000);
+	recordingScheduleStopTimer->start();
+	connect(
+		recordingScheduleStopTimer,
+		SIGNAL(timeout()),
+		SLOT(StopRecording()));
+
+	ui->statusbar->RecordingScheduled(secsToStart, durationInSecs);
+
+	recordingScheduled = true;
+}
+
+void OBSBasic::CancelScheduledRecording()
+{
+	ui->scheduleButton->setEnabled(true);
+	ui->scheduleStartTimeEdit->setEnabled(true);
+	ui->scheduleDuration->setEnabled(true);
+
+	if (!recordingScheduled) {
+		return;
+	}
+
+	ui->scheduleButton->setText(QTStr("Basic.Main.ScheduleRecording"));
+
+	recordingScheduleStartTimer->stop();
+	delete recordingScheduleStartTimer;
+	recordingScheduleStartTimer = nullptr;
+
+	recordingScheduleStopTimer->stop();
+	delete recordingScheduleStopTimer;
+	recordingScheduleStopTimer = nullptr;
+
+	ui->statusbar->RecordingScheduleCancelled();
+
+	recordingScheduled = false;
 }
 
 #define RP_NO_HOTKEY_TITLE QTStr("Output.ReplayBuffer.NoHotkey.Title")
@@ -4488,10 +4559,12 @@ void OBSBasic::on_streamButton_clicked()
 
 void OBSBasic::on_recordButton_clicked()
 {
-	if (outputHandler->RecordingActive())
+	if (outputHandler->RecordingActive()) {
 		StopRecording();
-	else
+	} else {
 		StartRecording();
+		CancelScheduledRecording();
+	}
 }
 
 void OBSBasic::on_scheduleButton_clicked()
@@ -4499,15 +4572,11 @@ void OBSBasic::on_scheduleButton_clicked()
 	if (outputHandler->RecordingActive())
 		return;
 
-	auto startTime = ui->scheduleStartTimeEdit->dateTime();
-	auto current = QDateTime::currentDateTime();
-	auto secsToStart = current.secsTo(startTime);
-	if (secsToStart < 0)
-		secsToStart = 0;
-	QTimer::singleShot(secsToStart * 1000, this, SLOT(StartRecording()));
-
-	auto durationInMin = ui->scheduleDuration->value();
-	QTimer::singleShot(durationInMin * 60 * 1000, this, SLOT(StopRecording()));
+	if (!recordingScheduled) {
+		ScheduleRecording();
+	} else {
+		CancelScheduledRecording();
+	}
 }
 
 void OBSBasic::on_settingsButton_clicked()

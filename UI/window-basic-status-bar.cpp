@@ -13,6 +13,7 @@ OBSBasicStatusBar::OBSBasicStatusBar(QWidget *parent)
 	  droppedFrames (new QLabel),
 	  streamTime    (new QLabel),
 	  recordTime    (new QLabel),
+	  recordScheduleTime(new QLabel),
 	  cpuUsage      (new QLabel),
 	  transparentPixmap (20, 20),
 	  greenPixmap       (20, 20),
@@ -43,6 +44,8 @@ OBSBasicStatusBar::OBSBasicStatusBar(QWidget *parent)
 	streamTime->setAlignment(Qt::AlignVCenter);
 	recordTime->setAlignment(Qt::AlignRight);
 	recordTime->setAlignment(Qt::AlignVCenter);
+	recordScheduleTime->setAlignment(Qt::AlignRight);
+	recordScheduleTime->setAlignment(Qt::AlignVCenter);
 	cpuUsage->setAlignment(Qt::AlignRight);
 	cpuUsage->setAlignment(Qt::AlignVCenter);
 	kbps->setAlignment(Qt::AlignRight);
@@ -52,10 +55,12 @@ OBSBasicStatusBar::OBSBasicStatusBar(QWidget *parent)
 	droppedFrames->setIndent(20);
 	streamTime->setIndent(20);
 	recordTime->setIndent(20);
+	recordScheduleTime->setIndent(20);
 	cpuUsage->setIndent(20);
 	kbps->setIndent(10);
 
 	addPermanentWidget(droppedFrames);
+	addPermanentWidget(recordScheduleTime);
 	addPermanentWidget(streamTime);
 	addPermanentWidget(recordTime);
 	addPermanentWidget(cpuUsage);
@@ -115,6 +120,7 @@ void OBSBasicStatusBar::Deactivate()
 		delete refreshTimer;
 
 		delayInfo->setText("");
+		recordScheduleTime->setText("");
 		droppedFrames->setText("");
 		kbps->setText("");
 
@@ -257,6 +263,28 @@ void OBSBasicStatusBar::UpdateRecordTime()
 	recordTime->setMinimumWidth(recordTime->width());
 }
 
+void OBSBasicStatusBar::UpdateRecordScheduleTime()
+{
+	if (!recordScheduled) {
+		recordScheduleTime->setText("");
+		return;
+	}
+
+	int totalSeconds = recordOutput
+		? --recordScheduleDuration
+		: --recordScheduleSecsToStart;
+
+	int seconds = totalSeconds % 60;
+	int totalMinutes = totalSeconds / 60;
+	int minutes = totalMinutes % 60;
+	int hours = totalMinutes / 60;
+
+	QString text;
+	text.sprintf("SCHEDULE: %02d:%02d:%02d", hours, minutes, seconds);
+	recordScheduleTime->setText(text);
+	recordScheduleTime->setMinimumWidth(recordScheduleTime->width());
+}
+
 void OBSBasicStatusBar::UpdateDroppedFrames()
 {
 	if (!streamOutput)
@@ -383,6 +411,8 @@ void OBSBasicStatusBar::UpdateStatusBar()
 	if (recordOutput)
 		UpdateRecordTime();
 
+	UpdateRecordScheduleTime();
+
 	UpdateDroppedFrames();
 
 	int skipped = video_output_get_skipped_frames(obs_get_video());
@@ -467,5 +497,23 @@ void OBSBasicStatusBar::RecordingStarted(obs_output_t *output)
 void OBSBasicStatusBar::RecordingStopped()
 {
 	recordOutput = nullptr;
+	Deactivate();
+}
+
+void OBSBasicStatusBar::RecordingScheduled(int secsToStart, int duration)
+{
+	recordScheduled = true;
+	recordScheduleSecsToStart = secsToStart;
+	recordScheduleDuration = duration;
+
+	Activate();
+}
+
+void OBSBasicStatusBar::RecordingScheduleCancelled()
+{
+	recordScheduled = false;
+	recordScheduleSecsToStart = 0;
+	recordScheduleDuration = 0;
+
 	Deactivate();
 }

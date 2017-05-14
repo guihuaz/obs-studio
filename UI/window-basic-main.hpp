@@ -120,6 +120,10 @@ private:
 	bool projectChanged = false;
 	bool previewEnabled = true;
 
+	bool recordingScheduled = false;
+	QTimer *recordingScheduleStartTimer = nullptr;
+	QTimer *recordingScheduleStopTimer = nullptr;
+
 	const char *copyString;
 	const char *copyFiltersString;
 	bool copyVisible = true;
@@ -366,6 +370,9 @@ public slots:
 
 	void StartRecording();
 	void StopRecording();
+
+	void ScheduleRecording();
+	void CancelScheduledRecording();
 
 	void RecordingStart();
 	void RecordStopping();
