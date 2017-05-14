@@ -185,6 +185,10 @@ OBSBasic::OBSBasic(QWidget *parent)
 	ui->scenes->setAttribute(Qt::WA_MacShowFocusRect, false);
 	ui->sources->setAttribute(Qt::WA_MacShowFocusRect, false);
 
+	auto scheduleStartTime = QDateTime::currentDateTime();
+	ui->scheduleStartTimeEdit->setDateTime(scheduleStartTime);
+	ui->scheduleStartTimeEdit->setMinimumDateTime(scheduleStartTime);
+
 	auto displayResize = [this]() {
 		struct obs_video_info ovi;
 
@@ -4488,6 +4492,22 @@ void OBSBasic::on_recordButton_clicked()
 		StopRecording();
 	else
 		StartRecording();
+}
+
+void OBSBasic::on_scheduleButton_clicked()
+{
+	if (outputHandler->RecordingActive())
+		return;
+
+	auto startTime = ui->scheduleStartTimeEdit->dateTime();
+	auto current = QDateTime::currentDateTime();
+	auto secsToStart = current.secsTo(startTime);
+	if (secsToStart < 0)
+		secsToStart = 0;
+	QTimer::singleShot(secsToStart * 1000, this, SLOT(StartRecording()));
+
+	auto durationInMin = ui->scheduleDuration->value();
+	QTimer::singleShot(durationInMin * 60 * 1000, this, SLOT(StopRecording()));
 }
 
 void OBSBasic::on_settingsButton_clicked()
